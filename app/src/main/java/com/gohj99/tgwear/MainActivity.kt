@@ -12,6 +12,7 @@ import android.annotation.SuppressLint
 import android.app.NotificationManager
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -26,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.edit
 import androidx.lifecycle.lifecycleScope
+import com.gohj99.tgwear.utils.telegram.searchPublicChat
 import com.gohj99.tgwear.model.Chat
 import com.gohj99.tgwear.model.SettingItem
 import com.gohj99.tgwear.ui.main.ErrorScreen
@@ -91,6 +93,37 @@ class MainActivity : BaseActivity() {
     override fun onResume() {
         super.onResume()
         onPaused.value = false
+    }
+
+    /**
+     * Resolves a "record voice message" shortcut request to (username, autoSend), or null.
+     *
+     * Two entry points are supported:
+     *  - deep link: tgwear://record/<username>[?autoSend=true]
+     *  - launcher alias (.VoiceShortcutAlias) carrying <meta-data> `tgwear.record.username`
+     *    and optional `tgwear.record.autoSend` in AndroidManifest.xml
+     */
+    private fun resolveRecordShortcut(): Pair<String, Boolean>? {
+        val data = intent.data
+        if (data != null && data.scheme == "tgwear" && data.host == "record") {
+            val username = data.pathSegments.firstOrNull()?.trimStart('@')
+            if (!username.isNullOrBlank()) {
+                return username to (data.getQueryParameter("autoSend") == "true")
+            }
+        }
+        val component = intent.component ?: return null
+        if (component.className.endsWith(".VoiceShortcutAlias")) {
+            val meta = try {
+                packageManager.getActivityInfo(component, PackageManager.GET_META_DATA).metaData
+            } catch (e: Exception) {
+                null
+            } ?: return null
+            val username = meta.getString("tgwear.record.username")?.trimStart('@')
+            if (!username.isNullOrBlank()) {
+                return username to meta.getBoolean("tgwear.record.autoSend", false)
+            }
+        }
+        return null
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -441,8 +474,29 @@ class MainActivity : BaseActivity() {
                         startActivity(
                             Intent(this@MainActivity, ChatActivity::class.java).apply {
                                 putExtra("chat", Chat(chatId, title = ""))
+                                putExtra("autoRecord", intent.getBooleanExtra("autoRecord", false))
+                                putExtra("autoSend", intent.getBooleanExtra("autoSend", false))
                             }
                         )
+                    }
+                }
+
+                // Voice-record shortcut: open the target chat and start recording
+                resolveRecordShortcut()?.let { (username, autoSend) ->
+                    TgApiManager.tgApi?.searchPublicChat(username) { tdChat ->
+                        if (tdChat != null) {
+                            runOnUiThread {
+                                startActivity(
+                                    Intent(this@MainActivity, ChatActivity::class.java).apply {
+                                        putExtra("chat", Chat(tdChat.id, title = tdChat.title))
+                                        putExtra("autoRecord", true)
+                                        putExtra("autoSend", autoSend)
+                                    }
+                                )
+                            }
+                        } else {
+                            Log.e("MainActivity", "Record shortcut: chat not found: $username")
+                        }
                     }
                 }
 

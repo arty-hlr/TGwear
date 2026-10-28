@@ -113,7 +113,9 @@ fun SplashChatScreen(
     currentUserId: MutableState<Long>,
     chatTopics: Map<Long, String>,
     selectTopicId: MutableState<Long>,
-    onCall: () -> Unit
+    onCall: () -> Unit,
+    autoRecord: Boolean = false,
+    autoSend: Boolean = false
 ) {
     // 获取context
     val context = LocalContext.current
@@ -124,7 +126,7 @@ fun SplashChatScreen(
     }
     val senderNameMap = remember { mutableStateOf(mutableMapOf<Long, String?>()) }
     val pagerState: PagerState =
-        androidx.wear.compose.foundation.pager.rememberPagerState(initialPage = 0) { 2 }
+        androidx.wear.compose.foundation.pager.rememberPagerState(initialPage = if (autoRecord) 1 else 0) { 2 }
     var notJoin by remember { mutableStateOf(chatObject.positions.isEmpty()) }
     val coroutineScope = rememberCoroutineScope()
     val planReplyMessage = remember { mutableStateOf(tgApi!!.replyMessage.value) }
@@ -412,7 +414,9 @@ fun SplashChatScreen(
                                 showUnknownMessageType = showUnknownMessageType,
                                 onLinkClick = onLinkClick,
                                 chatTopics = chatTopics,
-                                selectTopicId = selectTopicId
+                                selectTopicId = selectTopicId,
+                                autoRecord = autoRecord,
+                                autoSend = autoSend
                             )
                         }
                     }

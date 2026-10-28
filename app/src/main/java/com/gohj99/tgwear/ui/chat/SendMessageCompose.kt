@@ -95,7 +95,9 @@ fun SendMessageCompose(
     showUnknownMessageType: Boolean,
     chatTopics: Map<Long, String>,
     onLinkClick: (String) -> Unit,
-    selectTopicId: MutableState<Long>
+    selectTopicId: MutableState<Long>,
+    autoRecord: Boolean = false,
+    autoSend: Boolean = false
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -351,12 +353,81 @@ fun SendMessageCompose(
         timerText = "00:00"
     }
 
+    fun sendRecording() {
+        exoPlayer.pause() // 发送前停止播放
+
+        val finalDuration = if (recordDurationMs < 1000) 1 else (recordDurationMs / 1000).toInt()
+
+        if (planReplyMessage.value == null) {
+            tgApi?.sendMessage(
+                chatId = chatId,
+                message = TdApi.InputMessageVoiceNote().apply {
+                    duration = finalDuration
+                    voiceNote = TdApi.InputFileLocal().apply {
+                        this.path = recordingFile?.absolutePath
+                    }
+                    waveform = audioWave
+                },
+                messageThreadId = selectTopicId.value
+            )
+        } else {
+            val replyToMsg = planReplyMessage.value!!
+            val replyToInput = if (replyToMsg.chatId != chatId) {
+                TdApi.InputMessageReplyToExternalMessage(
+                    replyToMsg.chatId, replyToMsg.id, null
+                )
+            } else {
+                TdApi.InputMessageReplyToMessage(replyToMsg.id, null)
+            }
+
+            tgApi?.sendMessage(
+                chatId = chatId,
+                message = TdApi.InputMessageVoiceNote().apply {
+                    duration = finalDuration
+                    voiceNote = TdApi.InputFileLocal().apply {
+                        this.path = recordingFile?.absolutePath
+                    }
+                    waveform = audioWave
+                },
+                replyTo = replyToInput,
+                messageThreadId = selectTopicId.value
+            )
+            planReplyMessage.value = null
+            tgApi!!.replyMessage.value = null
+    }
+
+    inputText.value = ""
+    cancelAll() // 重置所有状态
+
+    coroutineScope.launch {
+        pagerState.animateScrollToPage(0)
+        listState.animateScrollToItem(0)
+    }
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
             // 授权后逻辑，可选：直接开始录音
+            if (autoRecord) startRecording()
         }
+    }
+
+    // Shortcut entry: begin recording as soon as the compose page is shown
+    LaunchedEffect(autoRecord) {
+        if (autoRecord && !recordMode) {
+            val hasPermission = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+            if (hasPermission) startRecording()
+            else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    // Optional: send immediately once the recording has been stopped
+    LaunchedEffect(isPreviewMode) {
+        if (autoSend && isPreviewMode) sendRecording()
     }
 
     // --- UI渲染 ---
@@ -645,55 +716,7 @@ fun SendMessageCompose(
                             stopRecordingAndPreview()
                         } else if (isPreviewMode) {
                             // 正在预览 -> 点击发送
-                            exoPlayer.pause() // 发送前停止播放
-
-                            val finalDuration = if (recordDurationMs < 1000) 1 else (recordDurationMs / 1000).toInt()
-
-                            if (planReplyMessage.value == null) {
-                                tgApi?.sendMessage(
-                                    chatId = chatId,
-                                    message = TdApi.InputMessageVoiceNote().apply {
-                                        duration = finalDuration
-                                        voiceNote = TdApi.InputFileLocal().apply {
-                                            this.path = recordingFile?.absolutePath
-                                        }
-                                        waveform = audioWave
-                                    },
-                                    messageThreadId = selectTopicId.value
-                                )
-                            } else {
-                                val replyToMsg = planReplyMessage.value!!
-                                val replyToInput = if (replyToMsg.chatId != chatId) {
-                                    TdApi.InputMessageReplyToExternalMessage(
-                                        replyToMsg.chatId, replyToMsg.id, null
-                                    )
-                                } else {
-                                    TdApi.InputMessageReplyToMessage(replyToMsg.id, null)
-                                }
-
-                                tgApi?.sendMessage(
-                                    chatId = chatId,
-                                    message = TdApi.InputMessageVoiceNote().apply {
-                                        duration = finalDuration
-                                        voiceNote = TdApi.InputFileLocal().apply {
-                                            this.path = recordingFile?.absolutePath
-                                        }
-                                        waveform = audioWave
-                                    },
-                                    replyTo = replyToInput,
-                                    messageThreadId = selectTopicId.value
-                                )
-                                planReplyMessage.value = null
-                                tgApi!!.replyMessage.value = null
-                            }
-
-                            inputText.value = ""
-                            cancelAll() // 重置所有状态
-
-                            coroutineScope.launch {
-                                pagerState.animateScrollToPage(0)
-                                listState.animateScrollToItem(0)
-                            }
+                            sendRecording()
                         }
                     },
                     modifier = Modifier

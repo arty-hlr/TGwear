@@ -128,11 +128,18 @@ class ChatActivity : BaseActivity() {
         }
     }
 
+    private var autoRecord = false
+    private var autoSend = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         // 接收传递的 Chat 对象
         chat = intent.getParcelableExtra("chat")
+
+        // Shortcut flow: start voice recording immediately (optionally auto-send)
+        autoRecord = intent.getBooleanExtra("autoRecord", false)
+        autoSend = intent.getBooleanExtra("autoSend", false)
 
         // 获取 TgApi 实例
         tgApi = TgApiManager.tgApi
@@ -147,6 +154,8 @@ class ChatActivity : BaseActivity() {
             // 如果 tgApi 为 null，打开主页面
             val openChatIntent = Intent(this, MainActivity::class.java).apply {
                 putExtra("chatId", chat!!.id)
+                putExtra("autoRecord", autoRecord)
+                putExtra("autoSend", autoSend)
             }
             startActivity(openChatIntent)
             finish()
@@ -521,7 +530,9 @@ class ChatActivity : BaseActivity() {
                                 selectTopicId = selectTopicId,
                                 onCall = {
                                     tgApi!!.createCall(safeChat.id)
-                                }
+                                },
+                                autoRecord = autoRecord,
+                                autoSend = autoSend
                             )
                         }
                     }

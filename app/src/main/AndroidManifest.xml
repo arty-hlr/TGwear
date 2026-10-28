@@ -172,7 +172,34 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Deep link: tgwear://record/<username>[?autoSend=true] -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="tgwear" android:host="record" />
+            </intent-filter>
         </activity>
+
+        <!-- Second launcher icon: one tap -> chat with the configured user/bot, recording. -->
+        <activity-alias
+            android:name=".VoiceShortcutAlias"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@drawable/ic_record"
+            android:label="@string/voice_shortcut_label"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="tgwear.record.username"
+                android:value="artemis_bot_username" />
+            <meta-data
+                android:name="tgwear.record.autoSend"
+                android:value="false" />
+        </activity-alias>
 
         <receiver
             android:name=".utils.notification.NotificationActionReceiver"
