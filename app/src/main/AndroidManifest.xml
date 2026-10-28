@@ -166,6 +166,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:taskAffinity=""
+            android:launchMode="singleTask"
             android:theme="@style/Theme.TGwear">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

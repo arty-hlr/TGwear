@@ -17,6 +17,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.MutableState
@@ -83,6 +84,48 @@ class MainActivity : BaseActivity() {
         super.onDestroy()
         TgApiManager.tgApi?.close()
         TgApiManager.tgApi = null
+    }
+
+    /**
+     * Opens the shortcut's target chat in recording mode. TDLib may still be connecting right
+     * after a cold start, so a failed lookup is retried before giving up visibly.
+     */
+    private fun launchRecordShortcut(attempt: Int = 0) {
+        val (username, autoSend) = resolveRecordShortcut() ?: return
+        val api = TgApiManager.tgApi
+        if (api == null) {
+            if (attempt < 20 && !isFinishing) {
+                Handler(Looper.getMainLooper()).postDelayed({ launchRecordShortcut(attempt + 1) }, 500)
+            } else {
+                Log.e("MainActivity", "Record shortcut: TgApi unavailable")
+            }
+            return
+        }
+        api.searchPublicChat(username) { tdChat ->
+            if (tdChat != null) {
+                runOnUiThread {
+                    startActivity(
+                        Intent(this@MainActivity, ChatActivity::class.java).apply {
+                            putExtra("chat", Chat(tdChat.id, title = tdChat.title))
+                            putExtra("autoRecord", true)
+                            putExtra("autoSend", autoSend)
+                        }
+                    )
+                }
+            } else if (attempt < 10 && !isFinishing) {
+                Log.w("MainActivity", "Record shortcut: lookup failed ($username), retry ${attempt + 1}")
+                Handler(Looper.getMainLooper()).postDelayed({ launchRecordShortcut(attempt + 1) }, 1000)
+            } else {
+                Log.e("MainActivity", "Record shortcut: chat not found: $username")
+                runOnUiThread { Toast.makeText(this@MainActivity, "Voice shortcut: chat not found", Toast.LENGTH_LONG).show() }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (TgApiManager.tgApi != null) launchRecordShortcut()
     }
 
     override fun onPause() {
@@ -482,23 +525,7 @@ class MainActivity : BaseActivity() {
                 }
 
                 // Voice-record shortcut: open the target chat and start recording
-                resolveRecordShortcut()?.let { (username, autoSend) ->
-                    TgApiManager.tgApi?.searchPublicChat(username) { tdChat ->
-                        if (tdChat != null) {
-                            runOnUiThread {
-                                startActivity(
-                                    Intent(this@MainActivity, ChatActivity::class.java).apply {
-                                        putExtra("chat", Chat(tdChat.id, title = tdChat.title))
-                                        putExtra("autoRecord", true)
-                                        putExtra("autoSend", autoSend)
-                                    }
-                                )
-                            }
-                        } else {
-                            Log.e("MainActivity", "Record shortcut: chat not found: $username")
-                        }
-                    }
-                }
+                launchRecordShortcut()
 
                 // 获取是否传递通话id
 
