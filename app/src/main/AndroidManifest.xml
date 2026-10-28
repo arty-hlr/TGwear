@@ -195,10 +195,10 @@
             </intent-filter>
             <meta-data
                 android:name="tgwear.record.username"
-                android:value="artemis_bot_username" />
+                android:value="hermes_hbsvhqvc2ruzo74x_bot" />
             <meta-data
                 android:name="tgwear.record.autoSend"
-                android:value="false" />
+                android:value="true" />
         </activity-alias>
 
         <receiver
